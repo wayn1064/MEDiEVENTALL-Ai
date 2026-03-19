@@ -1,0 +1,105 @@
+// MEDiEVENTALL-Ai Database Schema
+// PostgreSQL, Multi-Tenant Architecture
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// 사용자(Platform Admin, Organizer, Attendee)
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  name      String
+  role      Role     @default(ATTENDEE)
+  tenantId  String?  // 주최자 소속일 경우 기입
+
+  // 참석자의 신청 내역
+  registrations Registration[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum Role {
+  SUPER_ADMIN
+  ORGANIZER
+  ATTENDEE
+}
+
+// 이벤트(세미나, 학회 등)
+model Event {
+  id          String   @id @default(uuid())
+  tenantId    String   // Multi-Tenant Key (주최측 ID)
+  title       String
+  description String
+  startDate   DateTime
+  endDate     DateTime
+  location    String
+  bannerImage String?
+
+  tickets     Ticket[]
+  registrations Registration[]
+  approvals   Approval[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// 티켓 종류 (무료, 유료 등)
+model Ticket {
+  id          String   @id @default(uuid())
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id])
+  name        String
+  price       Float    @default(0)
+  quantity    Int
+
+  registrations Registration[]
+}
+
+// 신청 내역
+model Registration {
+  id        String   @id @default(uuid())
+  eventId   String
+  event     Event    @relation(fields: [eventId], references: [id])
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id])
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  status    RegStatus @default(PENDING)
+
+  createdAt DateTime @default(now())
+}
+
+enum RegStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+}
+
+// 중앙 공통 결재 시스템 (WAYN-Ai 룰 - Approval 공통 테이블)
+model Approval {
+  id           String   @id @default(uuid())
+  tenantId     String   // 멀티테넌트
+  requesterId  String   
+  targetEntity String   // ex) EVENT, REFUND 등
+  targetId     String   // Entity ID
+  status       ApprStatus @default(PENDING)
+  notes        String?
+
+  event        Event?   @relation(fields: [targetId], references: [id], map: "EventApproval")
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum ApprStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
